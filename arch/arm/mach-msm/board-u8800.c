@@ -34,7 +34,6 @@
 #include <linux/smsc911x.h>
 #include <linux/ofn_atlab.h>
 #include <linux/power_supply.h>
-#include <linux/i2c/isa1200.h>
 #include <linux/leds-pmic8058.h>
 #include <linux/msm_adc.h>
 #include <linux/dma-mapping.h>
@@ -55,7 +54,11 @@
 #include <mach/qdsp5v2/msm_lpa.h>
 #include <mach/dma.h>
 #include <linux/android_pmem.h>
-#include <linux/input/msm_ts.h>
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C) || \
+	defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C_MODULE)
+#include <linux/input/rmi_platformdata.h>
+#include <linux/input/rmi_i2c.h>
+#endif
 #include <mach/pmic.h>
 #include <mach/rpc_pmapp.h>
 #include <mach/qdsp5v2/aux_pcm.h>
@@ -2333,6 +2336,119 @@ static struct ofn_atlab_platform_data optnav_data = {
 		.motion_filter_en       = true,
 	},
 };
+
+#if defined(CONFIG_INPUT_TOUCHSCREEN)
+#define MAX_LEN		100
+
+static ssize_t u8800_virtual_keys_register(struct kobject *kobj,
+	struct kobj_attribute *attr, char *buf)
+{
+	char *virtual_keys =
+		__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":67:850:130:80\n"
+		__stringify(EV_KEY) ":" __stringify(KEY_MENU) ":192:850:112:80\n"
+		__stringify(EV_KEY) ":" __stringify(KEY_HOMEPAGE) ":309:850:116:80\n"
+		__stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":424:850:110:80\n";
+
+	return snprintf(buf, strnlen(virtual_keys, MAX_LEN) + 1 , "%s",
+			virtual_keys);
+}
+
+static struct kobj_attribute synaptics_virtual_keys_attr = {
+	.attr = {
+		.name = "virtualkeys.sensor00fn11",
+		.mode = S_IRUGO,
+	},
+	.show = &u8800_virtual_keys_register,
+};
+
+static struct attribute *virtual_key_properties_attrs[] = {
+	&synaptics_virtual_keys_attr.attr,
+	NULL
+};
+
+static struct attribute_group virtual_key_properties_attr_group = {
+	.attrs = virtual_key_properties_attrs,
+};
+
+struct kobject *virtual_key_properties_kobj;
+#endif
+
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C) || \
+defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C_MODULE)
+
+static int synaptics_ts_setup(void);
+
+#define SYNAPTICS_ATTEN_GPIO	148
+#define SYNAPTICS_RESET_GPIO	85
+
+static struct msm_gpio synaptics_cfg_data[] = {
+	{GPIO_CFG(SYNAPTICS_ATTEN_GPIO, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "rmi4_attn"},
+	{GPIO_CFG(SYNAPTICS_RESET_GPIO, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "rmi4_reset"},
+};
+
+static struct rmi_f11_functiondata synaptics_f11_data = {
+	.button_height = 182,
+};
+
+static struct rmi_functiondata synaptics_functiondata[] = {
+	{
+		.function_index = RMI_F11_INDEX,
+		.data = &synaptics_f11_data,
+	},
+};
+
+static struct rmi_functiondata_list synaptics_perfunctiondata = {
+	.count = ARRAY_SIZE(synaptics_functiondata),
+	.functiondata = synaptics_functiondata,
+};
+
+static struct rmi_sensordata synaptics_sensordata = {
+	.perfunctiondata = &synaptics_perfunctiondata,
+	.rmi_sensor_setup = synaptics_ts_setup,
+};
+
+static struct rmi_i2c_platformdata synaptics_platformdata = {
+	.i2c_address = 0x70,
+	.irq_type = IORESOURCE_IRQ_LOWLEVEL,
+	.sensordata = &synaptics_sensordata,
+};
+
+static struct i2c_board_info synaptics_i2c_ts[] = {
+	{
+		I2C_BOARD_INFO("rmi4_ts", 0x70),
+		.platform_data = &synaptics_platformdata,
+	},
+};
+
+static int synaptics_ts_setup(void)
+{
+	int ret = 0;
+
+	virtual_key_properties_kobj =
+		kobject_create_and_add("board_properties", NULL);
+	if (virtual_key_properties_kobj)
+		ret = sysfs_create_group(virtual_key_properties_kobj,
+				&virtual_key_properties_attr_group);
+	if (!virtual_key_properties_kobj || ret)
+		pr_err("failed to create u8800 board_properties\n");
+	
+	ret = msm_gpios_request_enable(synaptics_cfg_data,
+		sizeof(synaptics_cfg_data)/sizeof(struct msm_gpio));
+	if (ret) {
+		pr_err("%s:Failed to obtain synaptics GPIO %d. Code: %d.",
+				__func__, SYNAPTICS_ATTEN_GPIO, ret);
+		ret = 0; /* ignore the err */
+	}
+	synaptics_platformdata.irq = gpio_to_irq(SYNAPTICS_ATTEN_GPIO);
+
+	gpio_set_value(SYNAPTICS_ATTEN_GPIO, 0);
+	usleep(10000);
+	gpio_set_value(SYNAPTICS_ATTEN_GPIO, 1);
+	usleep(50000);
+	
+	return ret;
+}
+#endif
 
 static struct i2c_board_info msm_i2c_board_info[] = {
 	{
@@ -5099,6 +5215,13 @@ static void __init msm7x30_init(void)
 #ifdef CONFIG_I2C_SSBI
 	msm_device_ssbi7.dev.platform_data = &msm_i2c_ssbi7_pdata;
 #endif
+
+#if defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C) || \
+	defined(CONFIG_TOUCHSCREEN_SYNAPTICS_RMI4_I2C_MODULE)
+	i2c_register_board_info(0, synaptics_i2c_ts,
+		ARRAY_SIZE(synaptics_i2c_ts));
+#endif
+
 #if 0
 	i2c_register_board_info(0, msm_isa1200_board_info,
 		ARRAY_SIZE(msm_isa1200_board_info));
