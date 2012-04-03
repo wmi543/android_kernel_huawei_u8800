@@ -109,7 +109,7 @@
 #define PMIC_GPIO_SD_DET		36
 #define PMIC_GPIO_SDC4_EN_N		17  /* PMIC GPIO Number 18 */
 #define PMIC_GPIO_HDMI_5V_EN_V3	32  /* PMIC GPIO for V3 H/W */
-#define PMIC_GPIO_HDMI_5V_EN_V2	39 /* PMIC GPIO for V2 H/W */
+#define PMIC_GPIO_HDMI_5V_EN_V2	39  /* PMIC GPIO for V2 H/W */
 
 #define FPGA_SDCC_STATUS		0x8E0001A8
 
@@ -130,6 +130,11 @@
 #define PMIC_GPIO_WLAN_EXT_POR  22 /* PMIC GPIO NUMBER 23 */
 
 #define HAP_LVL_SHFT_MSM_GPIO 24
+
+#define DDR2_BANK_BASE 0X40000000
+
+unsigned long ebi1_phys_offset = DDR2_BANK_BASE;
+EXPORT_SYMBOL(ebi1_phys_offset);
 
 struct pm8xxx_gpio_init_info {
 	unsigned			gpio;
