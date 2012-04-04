@@ -4468,11 +4468,6 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc->caps |= MMC_CAP_SDIO_IRQ;
 #endif
 
-#ifdef CONFIG_MACH_HUAWEI_U8800
-	if (host->pdev_id == 4)
-		mmc->caps |= MMC_CAP_NEEDS_POLL;
-#endif
-
 	if (plat->is_sdio_al_client)
 		mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
 
