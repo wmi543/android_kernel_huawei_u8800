@@ -155,7 +155,7 @@ struct sx150x_platform_data msm8960_sx150x_data[] = {
 
 #define MSM8960_FIXED_AREA_START 0xb0000000
 #define MAX_FIXED_AREA_SIZE	0x10000000
-#define MSM_MM_FW_SIZE		0x280000
+#define MSM_MM_FW_SIZE		0x200000
 #define MSM8960_FW_START	(MSM8960_FIXED_AREA_START - MSM_MM_FW_SIZE)
 
 static unsigned msm_ion_sf_size = MSM_ION_SF_SIZE;
@@ -2213,6 +2213,7 @@ static struct platform_device *cdp_devices[] __initdata = {
 	&msm_8960_q6_mss_sw,
 	&msm_8960_riva,
 	&msm_pil_tzapps,
+	&msm_pil_vidc,
 	&msm8960_device_otg,
 	&msm8960_device_gadget_peripheral,
 	&msm_device_hsusb_host,

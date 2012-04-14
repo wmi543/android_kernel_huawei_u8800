@@ -2495,14 +2495,9 @@ static int hdcp_authentication_part1(void)
 				__func__, __LINE__,
 			(HDMI_INP_ND(0x011C) & BIT(8)) >> 8,
 			(HDMI_INP_ND(0x011C) & BIT(9)) >> 9);
+			mutex_unlock(&hdcp_auth_state_mutex);
 			goto error;
 		}
-
-		/*
-		 * A small delay is needed here to avoid device crash observed
-		 * during reauthentication in MSM8960
-		 */
-		msleep(20);
 
 		/* 0x0168 HDCP_RCVPORT_DATA12
 		   [23:8] BSTATUS

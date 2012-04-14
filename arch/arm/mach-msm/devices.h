@@ -188,6 +188,7 @@ extern struct platform_device msm_cpudai_incall_record_tx;
 extern struct platform_device msm_pil_q6v3;
 extern struct platform_device msm_pil_modem;
 extern struct platform_device msm_pil_tzapps;
+extern struct platform_device msm_pil_vidc;
 extern struct platform_device msm_8960_q6_lpass;
 extern struct platform_device msm_8960_q6_mss_fw;
 extern struct platform_device msm_8960_q6_mss_sw;
@@ -271,3 +272,8 @@ extern struct platform_device msm_etm_device;
 extern struct platform_device msm8960_cpu_idle_device;
 
 extern struct platform_device msm8960_msm_gov_device;
+
+extern struct platform_device msm_device_csic0;
+extern struct platform_device msm_device_csic1;
+extern struct platform_device msm_device_vfe;
+extern struct platform_device msm_device_vpe;

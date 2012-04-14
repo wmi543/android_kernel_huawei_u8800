@@ -433,7 +433,7 @@ static struct regulator_init_data saw_s0_init_data = {
 			.name = "8901_s0",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 			.min_uV = 800000,
-			.max_uV = 1250000,
+			.max_uV = 1325000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S0,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S0),
@@ -444,7 +444,7 @@ static struct regulator_init_data saw_s1_init_data = {
 			.name = "8901_s1",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
 			.min_uV = 800000,
-			.max_uV = 1250000,
+			.max_uV = 1325000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S1,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S1),
@@ -1535,6 +1535,7 @@ static struct platform_device android_usb_device = {
 #endif
 
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 static struct resource msm_vpe_resources[] = {
 	{
 		.start	= 0x05300000,
@@ -1555,8 +1556,10 @@ static struct platform_device msm_vpe_device = {
 	.resource = msm_vpe_resources,
 };
 #endif
+#endif
 
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MSM_CAMERA_FLASH
 #define VFE_CAMIF_TIMER1_GPIO 29
 #define VFE_CAMIF_TIMER2_GPIO 30
@@ -2459,6 +2462,7 @@ static struct i2c_board_info msm_camera_dragon_boardinfo[] __initdata = {
 	#endif
 };
 #endif
+#endif
 
 #ifdef CONFIG_MSM_GEMINI
 static struct resource msm_gemini_resources[] = {
@@ -2615,15 +2619,19 @@ static void __init msm8x60_init_dsps(void)
 #endif /* CONFIG_MSM_DSPS */
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
-#define MSM_FB_PRIM_BUF_SIZE (1024 * 600 * 4 * 3) /* 4 bpp x 3 pages */
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((1024 * 600 * 4), 4096) * 3) /* 4 bpp x 3 pages */
 #else
-#define MSM_FB_PRIM_BUF_SIZE (1024 * 600 * 4 * 2) /* 4 bpp x 2 pages */
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((1024 * 600 * 4), 4096) * 2) /* 4 bpp x 2 pages */
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-#define MSM_FB_EXT_BUF_SIZE  (1920 * 1080 * 2 * 1) /* 2 bpp x 1 page */
+#define MSM_FB_EXT_BUF_SIZE  \
+		(roundup((1920 * 1080 * 2), 4096) * 1) /* 2 bpp x 1 page */
 #elif defined(CONFIG_FB_MSM_TVOUT)
-#define MSM_FB_EXT_BUF_SIZE  (720 * 576 * 2 * 2) /* 2 bpp x 2 pages */
+#define MSM_FB_EXT_BUF_SIZE  \
+		(roundup((720 * 576 * 2), 4096) * 2) /* 2 bpp x 2 pages */
 #else
 #define MSM_FB_EXT_BUFT_SIZE	0
 #endif
@@ -2633,7 +2641,7 @@ static void __init msm8x60_init_dsps(void)
 				MSM_FB_DSUB_PMEM_ADDER, 4096)
 
 #define MSM_PMEM_SF_SIZE 0x4000000 /* 64 Mbytes */
-#define MSM_HDMI_PRIM_PMEM_SF_SIZE 0x4000000 /* 64 Mbytes */
+#define MSM_HDMI_PRIM_PMEM_SF_SIZE 0x8000000 /* 128 Mbytes */
 
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
 unsigned char hdmi_is_primary = 1;
@@ -2672,7 +2680,12 @@ unsigned char hdmi_is_primary;
 #define MSM_ION_MM_FW_SIZE	0x200000 /* (2MB) */
 #define MSM_ION_MM_SIZE		0x3600000 /* (54MB) */
 #define MSM_ION_MFC_SIZE	SZ_8K
+#ifdef CONFIG_FB_MSM_OVERLAY1_WRITEBACK
+#define MSM_ION_WB_SIZE		0xC00000 /* 12MB */
+#else
 #define MSM_ION_WB_SIZE		0x600000 /* 6MB */
+#endif
+
 #define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
 #define MSM_ION_AUDIO_SIZE	MSM_PMEM_AUDIO_SIZE
 
@@ -3846,6 +3859,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L14[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L15[] = {
 	REGULATOR_SUPPLY("8058_l15",		NULL),
+	REGULATOR_SUPPLY("cam_vana",		"1-001a"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L16[] = {
 	REGULATOR_SUPPLY("8058_l16",		NULL),
@@ -3876,6 +3890,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L24[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L25[] = {
 	REGULATOR_SUPPLY("8058_l25",		NULL),
+	REGULATOR_SUPPLY("cam_vdig",		"1-001a"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_S0[] = {
 	REGULATOR_SUPPLY("8058_s0",		NULL),
@@ -3894,6 +3909,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_S4[] = {
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS0[] = {
 	REGULATOR_SUPPLY("8058_lvs0",		NULL),
+	REGULATOR_SUPPLY("cam_vio",			"1-001a"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS1[] = {
 	REGULATOR_SUPPLY("8058_lvs1",		NULL),
@@ -4076,7 +4092,7 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 /* RPM early regulator constraints */
 static struct rpm_regulator_init_data rpm_regulator_early_init_data[] = {
 	/*	 ID       a_on pd ss min_uV   max_uV   init_ip    freq */
-	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
+	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1325000, SMPS_HMIN, 1p60),
 	RPM_SMPS(PM8058_S1, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
 };
 
@@ -4252,6 +4268,7 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&hdmi_msm_device,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MT9E013
 	&msm_camera_sensor_mt9e013,
 #endif
@@ -4271,11 +4288,14 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&msm_camera_sensor_qs_s5k4e1,
 #endif
 #endif
+#endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	&msm_vpe_device,
+#endif
 #endif
 	&msm_device_vidc,
 };
@@ -5195,6 +5215,7 @@ static struct platform_device *surf_devices[] __initdata = {
 	&mipi_dsi_novatek_panel_device,
 #endif
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 #ifdef CONFIG_MT9E013
 	&msm_camera_sensor_mt9e013,
 #endif
@@ -5214,11 +5235,14 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_camera_sensor_vx6953,
 #endif
 #endif
+#endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
 #ifdef CONFIG_MSM_VPE
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	&msm_vpe_device,
+#endif
 #endif
 
 #if defined(CONFIG_MSM_RPM_LOG) || defined(CONFIG_MSM_RPM_LOG_MODULE)
@@ -7212,6 +7236,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 	},
 #endif
 #ifdef CONFIG_MSM_CAMERA
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID ,
 		MSM_GSBI4_QUP_I2C_BUS_ID,
@@ -7224,6 +7249,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 		msm_camera_dragon_boardinfo,
 		ARRAY_SIZE(msm_camera_dragon_boardinfo),
 	},
+#endif
 #endif
 	{
 		I2C_SURF | I2C_FFA | I2C_FLUID,
@@ -7307,6 +7333,14 @@ static void register_i2c_devices(void)
 #ifdef CONFIG_I2C
 	u8 mach_mask = 0;
 	int i;
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	struct i2c_registry msm8x60_camera_i2c_devices = {
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_GSBI4_QUP_I2C_BUS_ID,
+		msm8x60_camera_board_info.board_info,
+		msm8x60_camera_board_info.num_i2c_board_info,
+	};
+#endif
 
 	/* Build the matching 'supported_machs' bitmask */
 	if (machine_is_msm8x60_surf() || machine_is_msm8x60_fusion())
@@ -7331,6 +7365,12 @@ static void register_i2c_devices(void)
 						msm8x60_i2c_devices[i].info,
 						msm8x60_i2c_devices[i].len);
 	}
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	if (msm8x60_camera_i2c_devices.machs & mach_mask)
+		i2c_register_board_info(msm8x60_camera_i2c_devices.bus,
+			msm8x60_camera_i2c_devices.info,
+			msm8x60_camera_i2c_devices.len);
+#endif
 #endif
 }
 
@@ -10321,7 +10361,11 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	msm8x60_init_tlmm();
 	msm8x60_init_gpiomux(board_data->gpiomux_cfgs);
 	msm8x60_init_uart12dm();
+#ifdef CONFIG_MSM_CAMERA_V4L2
+	msm8x60_init_cam();
+#endif
 	msm8x60_init_mmc();
+
 
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	msm8x60_init_pm8058_othc();
@@ -10333,13 +10377,13 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 		pm8058_platform_data.keypad_pdata = &dragon_keypad_data;
 	else
 		pm8058_platform_data.keypad_pdata = &ffa_keypad_data;
-
+#ifndef CONFIG_MSM_CAMERA_V4L2
 	/* Specify reset pin for OV9726 */
 	if (machine_is_msm8x60_dragon()) {
 		msm_camera_sensor_ov9726_data.sensor_reset = 62;
 		ov9726_sensor_8660_info.mount_angle = 270;
 	}
-
+#endif
 #ifdef CONFIG_BATTERY_MSM8X60
 	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
 		machine_is_msm8x60_fusion() || machine_is_msm8x60_dragon() ||
