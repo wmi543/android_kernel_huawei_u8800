@@ -85,6 +85,7 @@ static int __init mddi_nt35582_wvga_init(void)
 		pinfo->mddi.vdopkt = MDDI_DEFAULT_PRIM_PIX_ATTR;
 		pinfo->wait_cycle = 0;
 		pinfo->bpp = 16;
+		pinfo->mddi.is_type1 = TRUE;
 		pinfo->lcd.vsync_enable = TRUE;
 		pinfo->lcd.refx100 = 4000;
 		pinfo->lcd.v_back_porch = 0;
