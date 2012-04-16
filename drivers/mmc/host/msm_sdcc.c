@@ -4488,9 +4488,6 @@ msmsdcc_probe(struct platform_device *pdev)
 
 	mmc->caps2 |= MMC_CAP2_BOOTPART_NOACC;
 
-	if (plat->polling)
-		mmc->caps |= MMC_CAP_NEEDS_POLL;
-
 	if (plat->nonremovable)
 		mmc->caps |= MMC_CAP_NONREMOVABLE;
 #ifdef CONFIG_MMC_MSM_SDIO_SUPPORT

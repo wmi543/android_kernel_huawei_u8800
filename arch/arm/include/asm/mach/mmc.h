@@ -132,7 +132,6 @@ struct mmc_platform_data {
 	unsigned int status_gpio;
 	/* Indicates the polarity of the GPIO line when card is inserted */
 	bool is_status_gpio_active_low;
-	int polling;				/* set to 1 if card needs polling */
         unsigned int sdiowakeup_irq;
         unsigned long irq_flags;
         unsigned long mmc_bus_width;
