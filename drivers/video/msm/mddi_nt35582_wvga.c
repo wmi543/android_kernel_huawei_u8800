@@ -22,17 +22,17 @@
 #include "msm_fb.h"
 #include "mddihost.h"
 
-static int mddi_nt35582_wvga_enter_sleep(struct platform_device *pdev)
-{
-	int ret;
-	ret = mddi_queue_register_write(0x1000, 0, 0, 0);
-	return ret;
-}
-
-static int mddi_nt35582_wvga_exit_sleep(struct platform_device *pdev)
+static int mddi_nt35582_wvga_on(struct platform_device *pdev)
 {
 	int ret;
 	ret = mddi_queue_register_write(0x1100, 0, 120, 0);
+	return ret;
+}
+
+static int mddi_nt35582_wvga_off(struct platform_device *pdev)
+{
+	int ret;
+	ret = mddi_queue_register_write(0x1000, 0, 0, 0);
 	return ret;
 }
 
@@ -50,8 +50,8 @@ static struct platform_driver mddi_nt35582_wvga_driver = {
 };
 
 static struct msm_fb_panel_data mddi_nt35582_wvga_panel_data = {
-	.on = mddi_nt35582_wvga_exit_sleep,
-	.off = mddi_nt35582_wvga_enter_sleep,
+	.on = mddi_nt35582_wvga_on,
+	.off = mddi_nt35582_wvga_off,
 	//.set_backlight = pwm_set_backlight,
 };
 
