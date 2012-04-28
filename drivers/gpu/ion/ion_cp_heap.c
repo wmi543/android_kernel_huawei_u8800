@@ -27,9 +27,11 @@
 #include <linux/memory_alloc.h>
 #include <linux/seq_file.h>
 #include <linux/fmem.h>
+#include <linux/iommu.h>
 #include <mach/msm_memtypes.h>
 #include <mach/scm.h>
-#include "ion_priv.h"
+#include <mach/iommu_domains.h>
+ #include "ion_priv.h"
 
 #include <asm/mach/map.h>
 
@@ -293,8 +295,7 @@ static void ion_cp_heap_free(struct ion_buffer *buffer)
 	buffer->priv_phys = ION_CP_ALLOCATE_FAIL;
 }
 
-struct scatterlist *ion_cp_heap_map_dma(struct ion_heap *heap,
-					      struct ion_buffer *buffer)
+struct scatterlist *ion_cp_heap_create_sglist(struct ion_buffer *buffer)
 {
 	struct scatterlist *sglist;
 
@@ -308,6 +309,12 @@ struct scatterlist *ion_cp_heap_map_dma(struct ion_heap *heap,
 	sglist->dma_address = buffer->priv_phys;
 
 	return sglist;
+}
+
+struct scatterlist *ion_cp_heap_map_dma(struct ion_heap *heap,
+					      struct ion_buffer *buffer)
+{
+	return ion_cp_heap_create_sglist(buffer);
 }
 
 void ion_cp_heap_unmap_dma(struct ion_heap *heap,
@@ -560,6 +567,102 @@ int ion_cp_unsecure_heap(struct ion_heap *heap)
 	return ret_value;
 }
 
+static int ion_cp_heap_map_iommu(struct ion_buffer *buffer,
+				struct ion_iommu_map *data,
+				unsigned int domain_num,
+				unsigned int partition_num,
+				unsigned long align,
+				unsigned long iova_length,
+				unsigned long flags)
+{
+	struct iommu_domain *domain;
+	int ret = 0;
+	unsigned long extra;
+	int prot = ION_IS_CACHED(flags) ? 1 : 0;
+	struct scatterlist *sglist = 0;
+
+	data->mapped_size = iova_length;
+
+	if (!msm_use_iommu()) {
+		data->iova_addr = buffer->priv_phys;
+		return 0;
+	}
+
+	extra = iova_length - buffer->size;
+
+	data->iova_addr = msm_allocate_iova_address(domain_num, partition_num,
+						data->mapped_size, align);
+
+	if (!data->iova_addr) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	domain = msm_get_iommu_domain(domain_num);
+
+	if (!domain) {
+		ret = -ENOMEM;
+		goto out1;
+	}
+
+	sglist = ion_cp_heap_create_sglist(buffer);
+	if (IS_ERR_OR_NULL(sglist)) {
+		ret = -ENOMEM;
+		goto out1;
+	}
+	ret = iommu_map_range(domain, data->iova_addr, sglist,
+			      buffer->size, prot);
+	if (ret) {
+		pr_err("%s: could not map %lx in domain %p\n",
+			__func__, data->iova_addr, domain);
+		goto out1;
+	}
+
+	if (extra) {
+		unsigned long extra_iova_addr = data->iova_addr + buffer->size;
+		ret = msm_iommu_map_extra(domain, extra_iova_addr, extra, prot);
+		if (ret)
+			goto out2;
+	}
+	vfree(sglist);
+	return ret;
+
+out2:
+	iommu_unmap_range(domain, data->iova_addr, buffer->size);
+out1:
+	if (!IS_ERR_OR_NULL(sglist))
+		vfree(sglist);
+	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
+				data->mapped_size);
+out:
+	return ret;
+}
+
+static void ion_cp_heap_unmap_iommu(struct ion_iommu_map *data)
+{
+	unsigned int domain_num;
+	unsigned int partition_num;
+	struct iommu_domain *domain;
+
+	if (!msm_use_iommu())
+		return;
+
+	domain_num = iommu_map_domain(data);
+	partition_num = iommu_map_partition(data);
+
+	domain = msm_get_iommu_domain(domain_num);
+
+	if (!domain) {
+		WARN(1, "Could not get domain %d. Corruption?\n", domain_num);
+		return;
+	}
+
+	iommu_unmap_range(domain, data->iova_addr, data->mapped_size);
+	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
+				data->mapped_size);
+
+	return;
+}
 
 static struct ion_heap_ops cp_heap_ops = {
 	.allocate = ion_cp_heap_allocate,
@@ -575,6 +678,8 @@ static struct ion_heap_ops cp_heap_ops = {
 	.print_debug = ion_cp_print_debug,
 	.secure_heap = ion_cp_secure_heap,
 	.unsecure_heap = ion_cp_unsecure_heap,
+	.map_iommu = ion_cp_heap_map_iommu,
+	.unmap_iommu = ion_cp_heap_unmap_iommu,
 };
 
 struct ion_heap *ion_cp_heap_create(struct ion_platform_heap *heap_data)
