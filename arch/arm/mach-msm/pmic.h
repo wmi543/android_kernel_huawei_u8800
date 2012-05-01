@@ -281,6 +281,7 @@ int pmic_spkr_en_mute(enum spkr_left_right left_right, uint enabled);
 int pmic_mic_en(uint enable);
 int pmic_mic_set_volt(enum mic_volt vol);
 int pmic_set_led_intensity(enum ledtype type, int level);
+int pmic_set_keyled_intensity(enum ledtype type, int level);
 int pmic_flash_led_set_current(uint16_t milliamps);
 int pmic_flash_led_set_mode(enum flash_led_mode mode);
 int pmic_flash_led_set_polarity(enum flash_led_pol pol);

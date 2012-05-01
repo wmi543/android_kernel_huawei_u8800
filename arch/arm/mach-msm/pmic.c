@@ -133,6 +133,8 @@
 #define GPIO_SET_VOLTAGE_SOURCE_PROC 112
 #define GPIO_SET_OUTPUT_BUFFER_DRIVE_STRENGTH_PROC 113
 
+#define SET_KEYLED_INTENSITY_PROC 203
+
 /* rpc related */
 #define PMIC_RPC_TIMEOUT (5*HZ)
 
@@ -1030,6 +1032,12 @@ int pmic_set_led_intensity(enum ledtype type, int level)
 	return pmic_rpc_set_only(type, level, 0, 0, 2, SET_LED_INTENSITY_PROC);
 }
 EXPORT_SYMBOL(pmic_set_led_intensity);
+
+int pmic_set_keyled_intensity(enum ledtype type, int level)
+{
+	return pmic_rpc_set_only(type, level, 0, 0, 2, SET_KEYLED_INTENSITY_PROC);
+}
+EXPORT_SYMBOL(pmic_set_keyled_intensity);
 
 int pmic_flash_led_set_current(const uint16_t milliamps)
 {
