@@ -361,6 +361,15 @@ config LEDS_MSM_PMIC
           (Power Management IC) chip on Qualcomm reference boards,
           for example SURF and FFAs.
 
+config LEDS_PMIC_KEYPAD
+        tristate "LED Support for Qualcomm PMIC connected Keypad LEDs"
+        default n
+        depends on ARCH_MSM
+        help
+          This option enables support for keypad LEDs connected over PMIC
+          (Power Management IC) chip on Qualcomm boards,
+          for example Huawei U8800.
+
 config LEDS_PMIC8058
 	tristate "LED Support for Qualcomm PMIC8058"
 	default n

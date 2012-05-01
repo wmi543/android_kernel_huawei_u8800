@@ -3239,17 +3239,11 @@ static struct platform_device qcedev_device = {
 };
 #endif
 
-/*static int mddi_toshiba_pmic_bl(int level)
-{
-	int ret = -EPERM;
+static struct platform_device pmic_keypad_device = {
+	.name   = "pmic-keypad",
+	.id     = -1,
+};
 
-	ret = pmic_set_led_intensity(LED_LCD, level);
-
-	if (ret)
-		printk(KERN_WARNING "%s: can't set lcd backlight!\n",
-					__func__);
-	return ret;
-}*/
 
 /*static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
 	.pmic_backlight = mddi_toshiba_pmic_bl,
@@ -3576,6 +3570,10 @@ static int bahama_bt(int on)
 
 	const struct bahama_config_register *p;
 
+static struct platform_device pmic_keypad_device = {
+	.name   = "pmic-keypad",
+	.id     = -1,
+};
 
 	const struct bahama_config_register v10_bt_on[] = {
 		{ 0xE9, 0x00, 0xFF },
@@ -3967,6 +3965,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
 	&hs_device,
+	&pmic_keypad_device,
 #ifdef CONFIG_MSM7KV2_AUDIO
 	&msm_aictl_device,
 	&msm_mi2s_device,
