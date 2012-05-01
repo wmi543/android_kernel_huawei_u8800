@@ -3245,17 +3245,17 @@ static struct platform_device pmic_keypad_device = {
 };
 
 
-/*static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
-	.pmic_backlight = mddi_toshiba_pmic_bl,
-};*/
+static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
+	.gpio = 1,
+};
 
-/*static struct platform_device mddi_nt35582_wvga_device = {
+static struct platform_device mddi_nt35582_wvga_device = {
 	.name   = "mddi_nt35582_wvga",
 	.id     = 0,
-	//.dev    = {
-	//	.platform_data = &mddi_nt35582_wvga,
-	//}
-};*/
+	.dev    = {
+		.platform_data = &mddi_nt35582_wvga_pdata,
+	}
+};
 
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 {
@@ -3570,10 +3570,6 @@ static int bahama_bt(int on)
 
 	const struct bahama_config_register *p;
 
-static struct platform_device pmic_keypad_device = {
-	.name   = "pmic-keypad",
-	.id     = -1,
-};
 
 	const struct bahama_config_register v10_bt_on[] = {
 		{ 0xE9, 0x00, 0xFF },
@@ -3955,7 +3951,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&msm_fb_device,
 	&msm_migrate_pages_device,
-	//&mddi_nt35582_wvga_device,
+	&mddi_nt35582_wvga_device,
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
