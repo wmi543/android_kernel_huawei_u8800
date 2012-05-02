@@ -95,44 +95,44 @@
 
 #include "board-msm7x30-regulator.h"
 
-#define MSM_PMEM_SF_SIZE		0x1700000
+#define MSM_PMEM_SF_SIZE					0x1700000
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
-#define MSM_FB_SIZE				0x780000
+#define MSM_FB_SIZE							0x780000
 #else
-#define MSM_FB_SIZE				0x500000
+#define MSM_FB_SIZE							0x500000
 #endif
-#define MSM_PMEM_ADSP_SIZE		0x1E00000
-#define PMEM_KERNEL_EBI0_SIZE	0x600000
-#define MSM_PMEM_AUDIO_SIZE		0x200000
+#define MSM_PMEM_ADSP_SIZE					0x1E00000
+#define PMEM_KERNEL_EBI0_SIZE				0x600000
+#define MSM_PMEM_AUDIO_SIZE					0x200000
 
-#define PMIC_GPIO_INT			27
-#define PMIC_VREG_WLAN_LEVEL	2900
-#define PMIC_GPIO_SD_DET		21
-#define PMIC_GPIO_SDC4_EN_N		17  /* PMIC GPIO Number 18 */
-#define PMIC_GPIO_HDMI_5V_EN_V3	32  /* PMIC GPIO for V3 H/W */
-#define PMIC_GPIO_HDMI_5V_EN_V2	39  /* PMIC GPIO for V2 H/W */
+#define PMIC_GPIO_INT						27
+#define PMIC_VREG_WLAN_LEVEL				2900
+#define PMIC_GPIO_SD_DET					21
+#define PMIC_GPIO_SDC4_EN_N					17  /* PMIC GPIO Number 18 */
+#define PMIC_GPIO_HDMI_5V_EN_V3				32  /* PMIC GPIO for V3 H/W */
+#define PMIC_GPIO_HDMI_5V_EN_V2				39  /* PMIC GPIO for V2 H/W */
 
-#define FPGA_SDCC_STATUS		0x8E0001A8
+#define FPGA_SDCC_STATUS					0x8E0001A8
 
-#define FPGA_OPTNAV_GPIO_ADDR	0x8E000026
-#define OPTNAV_I2C_SLAVE_ADDR	(0xB0 >> 1)
-#define OPTNAV_IRQ		20
-#define OPTNAV_CHIP_SELECT	19
+#define FPGA_OPTNAV_GPIO_ADDR				0x8E000026
+#define OPTNAV_I2C_SLAVE_ADDR				(0xB0 >> 1)
+#define OPTNAV_IRQ							20
+#define OPTNAV_CHIP_SELECT					19
 
 /* Macros assume PMIC GPIOs start at 0 */
-#define PM8058_GPIO_PM_TO_SYS(pm_gpio)     (pm_gpio + NR_GPIO_IRQS)
-#define PM8058_GPIO_SYS_TO_PM(sys_gpio)    (sys_gpio - NR_GPIO_IRQS)
-#define PM8058_MPP_BASE			   PM8058_GPIO_PM_TO_SYS(PM8058_GPIOS)
-#define PM8058_MPP_PM_TO_SYS(pm_gpio)	   (pm_gpio + PM8058_MPP_BASE)
+#define PM8058_GPIO_PM_TO_SYS(pm_gpio)		(pm_gpio + NR_GPIO_IRQS)
+#define PM8058_GPIO_SYS_TO_PM(sys_gpio)		(sys_gpio - NR_GPIO_IRQS)
+#define PM8058_MPP_BASE						PM8058_GPIO_PM_TO_SYS(PM8058_GPIOS)
+#define PM8058_MPP_PM_TO_SYS(pm_gpio)		(pm_gpio + PM8058_MPP_BASE)
 
-#define PMIC_GPIO_FLASH_BOOST_ENABLE	15	/* PMIC GPIO Number 16 */
-#define PMIC_GPIO_HAP_ENABLE   16  /* PMIC GPIO Number 17 */
+#define PMIC_GPIO_FLASH_BOOST_ENABLE		15  /* PMIC GPIO Number 16 */
+#define PMIC_GPIO_HAP_ENABLE				16  /* PMIC GPIO Number 17 */
 
-#define PMIC_GPIO_WLAN_EXT_POR  22 /* PMIC GPIO NUMBER 23 */
+#define PMIC_GPIO_WLAN_EXT_POR				22  /* PMIC GPIO NUMBER 23 */
 
-#define HAP_LVL_SHFT_MSM_GPIO 24
+#define HAP_LVL_SHFT_MSM_GPIO				24
 
-#define DDR2_BANK_BASE 0X40000000
+#define DDR2_BANK_BASE						0x40000000
 
 unsigned long ebi1_phys_offset = DDR2_BANK_BASE;
 EXPORT_SYMBOL(ebi1_phys_offset);
