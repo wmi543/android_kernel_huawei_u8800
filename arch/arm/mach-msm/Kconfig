@@ -1979,6 +1979,14 @@ config MSM_RPC_VIBRATOR
 	  is connected on the PMIC. Say Y if you want to enable this
 	  feature.
 
+config MSM_HUAWEI_RPC_VIBRATOR
+	bool "RPC based HUAWEI MSM Vibrator Support"
+	depends on MSM_ONCRPCROUTER
+	help
+	  Enable the Huawei vibrator support on MSM over RPC. The vibrator
+	  is connected on the PMIC. Say Y if you want to enable this
+	  feature.
+
 config PM8XXX_RPC_VIBRATOR
 	bool "RPC based Vibrator on PM8xxx PMICs"
 	depends on MSM_RPC_VIBRATOR

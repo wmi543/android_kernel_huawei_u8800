@@ -91,6 +91,7 @@
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <mach/sdio_al.h>
 #include "smd_private.h"
+#include "msm_huawei_vibrator.h"
 
 #include "board-msm7x30-regulator.h"
 
@@ -5226,6 +5227,9 @@ static void __init msm7x30_init(void)
 #endif
 
 	pm8058_gpios_init();
+#ifdef CONFIG_MSM_HUAWEI_RPC_VIBRATOR
+	msm_init_pmic_vibrator();
+#endif
 
 	boot_reason = *(unsigned int *)
 		(smem_get_entry(SMEM_POWER_ON_STATUS_INFO, &smem_size));
