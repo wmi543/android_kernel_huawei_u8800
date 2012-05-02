@@ -130,11 +130,7 @@ enum {
 #define INTR_OVERLAY2_DONE		BIT(30)
 
 #ifdef CONFIG_FB_MSM_OVERLAY
-#define MDP4_ANY_INTR_MASK	(INTR_OVERLAY0_DONE|INTR_DMA_S_DONE | \
-				INTR_DMA_P_HISTOGRAM | \
-				INTR_DMA_S_HISTOGRAM | \
-				INTR_VG1_HISTOGRAM | \
-				INTR_VG2_HISTOGRAM )
+#define MDP4_ANY_INTR_MASK	(INTR_DMA_P_HISTOGRAM)
 #else
 #define MDP4_ANY_INTR_MASK	(INTR_DMA_P_DONE| \
 				INTR_DMA_P_HISTOGRAM | \
@@ -237,6 +233,9 @@ enum {
 #define MDP4_OP_SCALE_ALPHA_BILINEAR	(1 << 2)
 #define MDP4_OP_SCALEY_EN	BIT(1)
 #define MDP4_OP_SCALEX_EN	BIT(0)
+
+#define MDP4_REV40_UP_SCALING_MAX (8)
+#define MDP4_REV41_OR_LATER_UP_SCALING_MAX (20)
 
 #define MDP4_PIPE_PER_MIXER	2
 
@@ -529,7 +528,7 @@ void mdp4_overlay0_done_mddi(struct mdp_dma_data *dma);
 void mdp4_dma_s_done_mddi(void);
 void mdp4_dma_p_done_mddi(void);
 void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma);
-void mdp4_dma_p_done_dsi_video(void);
+void mdp4_dma_p_done_dsi_video(struct mdp_dma_data *dma);
 void mdp4_dma_p_done_lcdc(void);
 void mdp4_overlay1_done_dtv(void);
 void mdp4_overlay1_done_atv(void);
