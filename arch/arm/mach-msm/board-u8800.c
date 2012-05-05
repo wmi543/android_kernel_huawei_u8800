@@ -2671,27 +2671,27 @@ static void msm_hsusb_vbus_power(unsigned phy_info, int on)
 		},
 	};
 
-        /* If VBUS is already on (or off), do nothing. */
-        if (unlikely(on == vbus_is_on))
-                return;
+	/* If VBUS is already on (or off), do nothing. */
+	if (unlikely(on == vbus_is_on))
+		return;
 
-        if (on) {
+	if (on) {
 		rc = pm8xxx_gpio_config(usb_vbus.gpio, &usb_vbus.config);
 		if (rc) {
-                        pr_err("%s PMIC GPIO 36 write failed\n", __func__);
-                        return;
-                }
+			pr_err("%s PMIC GPIO 36 write failed\n", __func__);
+			return;
+		}
 	} else {
 		gpio_set_value_cansleep(PM8058_GPIO_PM_TO_SYS(36), 0);
 	}
 
-        vbus_is_on = on;
+	vbus_is_on = on;
 }
 
 static struct msm_usb_host_platform_data msm_usb_host_pdata = {
-        .phy_info   = (USB_PHY_INTEGRATED | USB_PHY_MODEL_45NM),
-        .vbus_power = msm_hsusb_vbus_power,
-        .power_budget   = 180,
+	.phy_info   = (USB_PHY_INTEGRATED | USB_PHY_MODEL_45NM),
+	.vbus_power = msm_hsusb_vbus_power,
+	.power_budget   = 180,
 };
 #endif
 
@@ -2709,16 +2709,16 @@ static int hsusb_rpc_connect(int connect)
 static struct regulator *vreg_3p3;
 static int msm_hsusb_ldo_init(int init)
 {
-	//uint32_t version = 0;
+	uint32_t version = 0;
 	int def_vol = 3400000;
 
-	/*version = socinfo_get_version();
+	version = socinfo_get_version();
 
 	if (SOCINFO_VERSION_MAJOR(version) >= 2 &&
 			SOCINFO_VERSION_MINOR(version) >= 1) {
 		def_vol = 3075000;
 		pr_debug("%s: default voltage:%d\n", __func__, def_vol);
-	}*/
+	}
 
 	if (init) {
 		vreg_3p3 = regulator_get(NULL, "usb");
