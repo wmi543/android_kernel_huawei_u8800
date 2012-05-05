@@ -91,7 +91,9 @@
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <mach/sdio_al.h>
 #include "smd_private.h"
+#ifdef CONFIG_MSM_HUAWEI_RPC_VIBRATOR
 #include "msm_huawei_vibrator.h"
+#endif
 
 #include "board-msm7x30-regulator.h"
 
