@@ -205,8 +205,6 @@ static int pm8058_gpios_init(void)
 	}
 #endif
 
-	hdmi_5V_en.gpio = PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN_V3);
-
 	rc = pm8xxx_gpio_config(hdmi_5V_en.gpio, &hdmi_5V_en.config);
 	if (rc) {
 		pr_err("%s PMIC_GPIO_HDMI_5V_EN config failed\n", __func__);
