@@ -3245,7 +3245,7 @@ static struct platform_device pmic_keypad_device = {
 	.id     = -1,
 };
 
-
+#ifdef CONFIG_FB_MSM_MDDI_NT35582_WVGA
 static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
 	.gpio = 1,
 };
@@ -3257,6 +3257,7 @@ static struct platform_device mddi_nt35582_wvga_device = {
 		.platform_data = &mddi_nt35582_wvga_pdata,
 	}
 };
+#endif
 
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 {
@@ -3952,7 +3953,9 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&msm_fb_device,
 	&msm_migrate_pages_device,
+#ifdef CONFIG_FB_MSM_MDDI_NT35582_WVGA
 	&mddi_nt35582_wvga_device,
+#endif
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
