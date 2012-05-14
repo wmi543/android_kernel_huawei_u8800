@@ -167,7 +167,8 @@ struct tabla_reg_address {
 };
 
 enum tabla_mbhc_plug_type {
-	PLUG_TYPE_NONE = 0,
+	PLUG_TYPE_INVALID = -1,
+	PLUG_TYPE_NONE,
 	PLUG_TYPE_HEADSET,
 	PLUG_TYPE_HEADPHONE,
 	PLUG_TYPE_HIGH_HPH,
@@ -253,12 +254,7 @@ struct tabla_priv {
 	 * kill race between DAPM and MBHC.But can serve as a
 	 * general lock to protect codec resource
 	 */
-	struct mutex cdc_resource_lock;
-
-	/* Used to override the rule "invalid headset
-	 * when microphone voltage is too high"
-	 */
-	bool mbhc_inval_hs_range_override;
+	struct mutex codec_resource_lock;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_poke;
@@ -1375,7 +1371,7 @@ static int tabla_codec_enable_anc(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_codec_start_hs_polling(struct snd_soc_codec *codec)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
@@ -1417,7 +1413,7 @@ static void tabla_codec_start_hs_polling(struct snd_soc_codec *codec)
 	pr_debug("%s: leave\n", __func__);
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_codec_pause_hs_polling(struct snd_soc_codec *codec)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
@@ -1447,7 +1443,7 @@ static void tabla_codec_switch_cfilt_mode(struct snd_soc_codec *codec, int mode)
 					tabla->mbhc_bias_regs.cfilt_ctl) & 0x40;
 
 	if (cur_mode_val != reg_mode_val) {
-		TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+		TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 		if (tabla->mbhc_polling_active) {
 			tabla_codec_pause_hs_polling(codec);
 			mbhc_was_polling = true;
@@ -1456,7 +1452,7 @@ static void tabla_codec_switch_cfilt_mode(struct snd_soc_codec *codec, int mode)
 			tabla->mbhc_bias_regs.cfilt_ctl, 0x40, reg_mode_val);
 		if (mbhc_was_polling)
 			tabla_codec_start_hs_polling(codec);
-		TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+		TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 		pr_debug("%s: CFILT mode change (%x to %x)\n", __func__,
 			cur_mode_val, reg_mode_val);
 	} else {
@@ -1577,7 +1573,7 @@ static void tabla_turn_onoff_override(struct snd_soc_codec *codec, bool on)
 	snd_soc_update_bits(codec, TABLA_A_CDC_MBHC_B1_CTL, 0x04, on << 2);
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_codec_drive_v_to_micbias(struct snd_soc_codec *codec,
 					   int usec)
 {
@@ -1612,13 +1608,17 @@ static void __tabla_codec_switch_micbias(struct snd_soc_codec *codec,
 					 int vddio_switch, bool restartpolling,
 					 bool checkpolling)
 {
-	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
 	int cfilt_k_val;
+	bool override;
+	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
+
 	if (vddio_switch && !tabla->mbhc_micbias_switched &&
 	    (!checkpolling || tabla->mbhc_polling_active)) {
 		if (restartpolling)
 			tabla_codec_pause_hs_polling(codec);
-		tabla_turn_onoff_override(codec, true);
+		override = snd_soc_read(codec, TABLA_A_CDC_MBHC_B1_CTL) & 0x04;
+		if (!override)
+			tabla_turn_onoff_override(codec, true);
 		/* Adjust threshold if Mic Bias voltage changes */
 		if (tabla->mbhc_data.micb_mv != VDDIO_MICBIAS_MV) {
 			cfilt_k_val = tabla_find_k_value(
@@ -1643,7 +1643,8 @@ static void __tabla_codec_switch_micbias(struct snd_soc_codec *codec,
 				    0x80, 0x80);
 		snd_soc_update_bits(codec, tabla->mbhc_bias_regs.mbhc_reg,
 				    0x10, 0x00);
-		tabla_turn_onoff_override(codec, false);
+		if (!override)
+			tabla_turn_onoff_override(codec, false);
 		if (restartpolling)
 			tabla_codec_start_hs_polling(codec);
 
@@ -1736,9 +1737,9 @@ static int tabla_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_PRE_PMU:
 		/* Decide whether to switch the micbias for MBHC */
 		if (w->reg == tabla->mbhc_bias_regs.ctl_reg) {
-			TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+			TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 			tabla_codec_switch_micbias(codec, 0);
-			TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+			TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 		}
 
 		snd_soc_update_bits(codec, w->reg, 0x0E, 0x0A);
@@ -1758,19 +1759,19 @@ static int tabla_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 
 		if (tabla->mbhc_polling_active &&
 		    tabla->mbhc_cfg.micbias == micb_line) {
-			TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+			TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 			tabla_codec_pause_hs_polling(codec);
 			tabla_codec_start_hs_polling(codec);
-			TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+			TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 		}
 		break;
 
 	case SND_SOC_DAPM_POST_PMD:
 		if ((w->reg == tabla->mbhc_bias_regs.ctl_reg) &&
 		    tabla_is_hph_pa_on(codec)) {
-			TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+			TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 			tabla_codec_switch_micbias(codec, 1);
-			TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+			TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 		}
 
 		if (strnstr(w->name, internal1_text, 30))
@@ -2098,9 +2099,9 @@ static int tabla_hph_pa_event(struct snd_soc_dapm_widget *w,
 				tabla->mbhc_bias_regs.ctl_reg);
 
 		if (!(mbhc_micb_ctl_val & 0x80)) {
-			TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+			TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 			tabla_codec_switch_micbias(codec, 1);
-			TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+			TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 		}
 		break;
 
@@ -2126,9 +2127,9 @@ static int tabla_hph_pa_event(struct snd_soc_dapm_widget *w,
 				schedule_work(&tabla->hphrocp_work);
 		}
 
-		TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+		TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 		tabla_codec_switch_micbias(codec, 0);
-		TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+		TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 
 		pr_debug("%s: sleep 10 ms after %s PA disable.\n", __func__,
 				w->name);
@@ -3255,7 +3256,7 @@ int tabla_mclk_enable(struct snd_soc_codec *codec, int mclk_enable, bool dapm)
 	pr_debug("%s: mclk_enable = %u, dapm = %d\n", __func__, mclk_enable,
 		 dapm);
 	if (dapm)
-		TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+		TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 	if (mclk_enable) {
 		tabla->mclk_enabled = true;
 
@@ -3275,7 +3276,7 @@ int tabla_mclk_enable(struct snd_soc_codec *codec, int mclk_enable, bool dapm)
 
 		if (!tabla->mclk_enabled) {
 			if (dapm)
-				TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+				TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 			pr_err("Error, MCLK already diabled\n");
 			return -EINVAL;
 		}
@@ -3300,7 +3301,7 @@ int tabla_mclk_enable(struct snd_soc_codec *codec, int mclk_enable, bool dapm)
 		}
 	}
 	if (dapm)
-		TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+		TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 	return 0;
 }
 
@@ -3628,7 +3629,7 @@ static short tabla_codec_sta_dce(struct snd_soc_codec *codec, int dce,
 	return __tabla_codec_sta_dce(codec, dce, false, norel);
 }
 
-/* called only from interrupt which is under cdc_resource_lock acquisition */
+/* called only from interrupt which is under codec_resource_lock acquisition */
 static short tabla_codec_setup_hs_polling(struct snd_soc_codec *codec)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
@@ -3694,7 +3695,7 @@ static int tabla_cancel_btn_work(struct tabla_priv *tabla)
 	return r;
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 void tabla_set_and_turnoff_hph_padac(struct snd_soc_codec *codec)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
@@ -3770,7 +3771,7 @@ static void tabla_clr_and_turnon_hph_padac(struct tabla_priv *tabla)
 	}
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_codec_report_plug(struct snd_soc_codec *codec, int insertion,
 				    enum snd_jack_types jack_type)
 {
@@ -4350,8 +4351,9 @@ static bool tabla_mbhc_fw_validate(const struct firmware *fw)
 	return true;
 }
 
+/* called under codec_resource_lock acquisition */
 static int tabla_determine_button(const struct tabla_priv *priv,
-				  const s32 bias_mv)
+				  const s32 micmv)
 {
 	s16 *v_btn_low, *v_btn_high;
 	struct tabla_mbhc_btn_detect_cfg *btn_det;
@@ -4360,9 +4362,10 @@ static int tabla_determine_button(const struct tabla_priv *priv,
 	btn_det = TABLA_MBHC_CAL_BTN_DET_PTR(priv->mbhc_cfg.calibration);
 	v_btn_low = tabla_mbhc_cal_btn_det_mp(btn_det, TABLA_BTN_DET_V_BTN_LOW);
 	v_btn_high = tabla_mbhc_cal_btn_det_mp(btn_det,
-					       TABLA_BTN_DET_V_BTN_HIGH);
+				TABLA_BTN_DET_V_BTN_HIGH);
+
 	for (i = 0; i < btn_det->num_btn; i++) {
-		if ((v_btn_low[i] <= bias_mv) && (v_btn_high[i] >= bias_mv)) {
+		if ((v_btn_low[i] <= micmv) && (v_btn_high[i] >= micmv)) {
 			btn = i;
 			break;
 		}
@@ -4370,7 +4373,7 @@ static int tabla_determine_button(const struct tabla_priv *priv,
 
 	if (btn == -1)
 		pr_debug("%s: couldn't find button number for mic mv %d\n",
-			 __func__, bias_mv);
+			 __func__, micmv);
 
 	return btn;
 }
@@ -4410,8 +4413,9 @@ static int tabla_get_button_mask(const int btn)
 static irqreturn_t tabla_dce_handler(int irq, void *data)
 {
 	int i, mask;
-	short dce, sta, bias_value_dce;
-	s32 mv, stamv, bias_mv_dce;
+	short dce, sta;
+	s32 mv, mv_s, stamv_s;
+	bool vddio;
 	int btn = -1, meas = 0;
 	struct tabla_priv *priv = data;
 	const struct tabla_mbhc_btn_detect_cfg *d =
@@ -4424,7 +4428,7 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 
 	pr_debug("%s: enter\n", __func__);
 
-	TABLA_ACQUIRE_LOCK(priv->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(priv->codec_resource_lock);
 	if (priv->mbhc_state == MBHC_STATE_POTENTIAL_RECOVERY) {
 		pr_debug("%s: mbhc is being recovered, skip button press\n",
 			 __func__);
@@ -4450,6 +4454,10 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 		goto done;
 	}
 
+	vddio = (priv->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
+		 priv->mbhc_micbias_switched);
+	mv_s = vddio ? tabla_scale_v_micb_vddio(priv, mv, false) : mv;
+
 	if (mbhc_status != TABLA_MBHC_STATUS_REL_DETECTION) {
 		if (priv->mbhc_last_resume &&
 		    !time_after(jiffies, priv->mbhc_last_resume + HZ)) {
@@ -4460,27 +4468,32 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 			pr_debug("%s: Button is already released without "
 				 "resume", __func__);
 			sta = tabla_codec_read_sta_result(codec);
-			stamv = tabla_codec_sta_dce_v(codec, 0, sta);
-			btn = tabla_determine_button(priv, mv);
-			if (btn != tabla_determine_button(priv, stamv))
+			stamv_s = tabla_codec_sta_dce_v(codec, 0, sta);
+			if (vddio)
+				stamv_s = tabla_scale_v_micb_vddio(priv,
+								   stamv_s,
+								   false);
+			btn = tabla_determine_button(priv, mv_s);
+			if (btn != tabla_determine_button(priv, stamv_s))
 				btn = -1;
 			goto done;
 		}
 	}
 
 	/* determine pressed button */
-	btnmeas[meas++] = tabla_determine_button(priv, mv);
-	pr_debug("%s: meas %d - DCE %d,%d, button %d\n", __func__,
-		 meas - 1, dce, mv, btnmeas[meas - 1]);
+	btnmeas[meas++] = tabla_determine_button(priv, mv_s);
+	pr_debug("%s: meas %d - DCE %d,%d,%d button %d\n", __func__,
+		 meas - 1, dce, mv, mv_s, btnmeas[meas - 1]);
 	if (n_btn_meas == 0)
 		btn = btnmeas[0];
 	for (; ((d->n_btn_meas) && (meas < (d->n_btn_meas + 1))); meas++) {
-		bias_value_dce = tabla_codec_sta_dce(codec, 1, false);
-		bias_mv_dce = tabla_codec_sta_dce_v(codec, 1, bias_value_dce);
-		btnmeas[meas] = tabla_determine_button(priv, bias_mv_dce);
-		pr_debug("%s: meas %d - DCE %d,%d, button %d\n",
-			 __func__, meas, bias_value_dce, bias_mv_dce,
-			 btnmeas[meas]);
+		dce = tabla_codec_sta_dce(codec, 1, false);
+		mv = tabla_codec_sta_dce_v(codec, 1, dce);
+		mv_s = vddio ? tabla_scale_v_micb_vddio(priv, mv, false) : mv;
+
+		btnmeas[meas] = tabla_determine_button(priv, mv_s);
+		pr_debug("%s: meas %d - DCE %d,%d,%d button %d\n",
+			 __func__, meas, dce, mv, mv_s, btnmeas[meas]);
 		/* if large enough measurements are collected,
 		 * start to check if last all n_btn_con measurements were
 		 * in same button low/high range */
@@ -4523,7 +4536,7 @@ static irqreturn_t tabla_dce_handler(int irq, void *data)
 
  done:
 	pr_debug("%s: leave\n", __func__);
-	TABLA_RELEASE_LOCK(priv->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(priv->codec_resource_lock);
 	return IRQ_HANDLED;
 }
 
@@ -4572,7 +4585,7 @@ static irqreturn_t tabla_release_handler(int irq, void *data)
 
 	pr_debug("%s: enter\n", __func__);
 
-	TABLA_ACQUIRE_LOCK(priv->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(priv->codec_resource_lock);
 	priv->mbhc_state = MBHC_STATE_RELEASE;
 
 	tabla_codec_drive_v_to_micbias(codec, 10000);
@@ -4620,7 +4633,7 @@ static irqreturn_t tabla_release_handler(int irq, void *data)
 	tabla_codec_start_hs_polling(codec);
 
 	pr_debug("%s: leave\n", __func__);
-	TABLA_RELEASE_LOCK(priv->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(priv->codec_resource_lock);
 	return IRQ_HANDLED;
 }
 
@@ -4730,7 +4743,7 @@ static irqreturn_t tabla_hphr_ocp_irq(int irq, void *data)
 }
 
 static bool tabla_is_invalid_insertion_range(struct snd_soc_codec *codec,
-					     s32 mic_volt)
+					     s32 mic_volt, bool highhph)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
 	bool invalid = false;
@@ -4740,7 +4753,7 @@ static bool tabla_is_invalid_insertion_range(struct snd_soc_codec *codec,
 	 * needs to be considered as invalid
 	 */
 	v_hs_max = tabla_get_current_v_hs_max(tabla);
-	if (!tabla->mbhc_inval_hs_range_override && (mic_volt > v_hs_max))
+	if (!highhph && (mic_volt > v_hs_max))
 		invalid = true;
 	else if (mic_volt < tabla->mbhc_data.v_inval_ins_high &&
 		 (mic_volt > tabla->mbhc_data.v_inval_ins_low))
@@ -4760,41 +4773,7 @@ static bool tabla_is_inval_insert_delta(struct snd_soc_codec *codec,
 	return false;
 }
 
-static bool tabla_codec_is_invalid_plug(struct snd_soc_codec *codec,
-					s32 mic_mv[MBHC_NUM_DCE_PLUG_DETECT],
-					enum tabla_mbhc_plug_type
-					    plug_type[MBHC_NUM_DCE_PLUG_DETECT])
-{
-	int i;
-	bool r = false;
-	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
-	struct tabla_mbhc_plug_type_cfg *plug_type_ptr =
-		TABLA_MBHC_CAL_PLUG_TYPE_PTR(tabla->mbhc_cfg.calibration);
-	s16 v_hs_max = tabla_get_current_v_hs_max(tabla);
-
-	for (i = 0 ; i < MBHC_NUM_DCE_PLUG_DETECT && !r; i++) {
-		if (mic_mv[i] < plug_type_ptr->v_no_mic)
-			plug_type[i] = PLUG_TYPE_HEADPHONE;
-		else if (mic_mv[i] < v_hs_max)
-			plug_type[i] = PLUG_TYPE_HEADSET;
-		else if (mic_mv[i] > v_hs_max)
-			plug_type[i] = PLUG_TYPE_HIGH_HPH;
-
-		r = tabla_is_invalid_insertion_range(codec, mic_mv[i]);
-		if (!r && i > 0) {
-			if (plug_type[i-1] != plug_type[i])
-				r = true;
-			else
-				r = tabla_is_inval_insert_delta(codec,
-						  mic_mv[i], mic_mv[i - 1],
-						  TABLA_MBHC_FAKE_INS_DELTA_MV);
-		}
-	}
-
-	return r;
-}
-
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 void tabla_find_plug_and_report(struct snd_soc_codec *codec,
 				enum tabla_mbhc_plug_type plug_type)
 {
@@ -4836,18 +4815,18 @@ static void tabla_schedule_hs_detect_plug(struct tabla_priv *tabla)
 	schedule_work(&tabla->hs_correct_plug_work);
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_cancel_hs_detect_plug(struct tabla_priv *tabla)
 {
 	pr_debug("%s: canceling hs_correct_plug_work\n", __func__);
 	tabla->hs_detect_work_stop = true;
 	wmb();
-	TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 	if (cancel_work_sync(&tabla->hs_correct_plug_work)) {
 		pr_debug("%s: hs_correct_plug_work is canceled\n", __func__);
 		tabla_unlock_sleep(tabla->codec->control_data);
 	}
-	TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 }
 
 static bool tabla_hs_gpio_level_remove(struct tabla_priv *tabla)
@@ -4856,15 +4835,127 @@ static bool tabla_hs_gpio_level_remove(struct tabla_priv *tabla)
 		tabla->mbhc_cfg.gpio_level_insert);
 }
 
+/* called under codec_resource_lock acquisition */
+static void tabla_codec_hphr_gnd_switch(struct snd_soc_codec *codec, bool on)
+{
+	snd_soc_update_bits(codec, TABLA_A_MBHC_HPH, 0x01, on);
+	if (on)
+		usleep_range(5000, 5000);
+}
+
+/* called under codec_resource_lock acquisition and mbhc override = 1 */
+static enum tabla_mbhc_plug_type
+tabla_codec_get_plug_type(struct snd_soc_codec *codec, bool highhph)
+{
+	int i;
+	bool gndswitch, vddioswitch;
+	int scaled;
+	struct tabla_mbhc_plug_type_cfg *plug_type_ptr;
+	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
+	const bool vddio = (tabla->mbhc_data.micb_mv != VDDIO_MICBIAS_MV);
+	int num_det = (MBHC_NUM_DCE_PLUG_DETECT + vddio);
+	enum tabla_mbhc_plug_type plug_type[num_det];
+	s16 mb_v[num_det];
+	s32 mic_mv[num_det];
+	bool inval = false;
+
+	/* make sure override is on */
+	WARN_ON(!(snd_soc_read(codec, TABLA_A_CDC_MBHC_B1_CTL) & 0x04));
+
+	/* performs DCEs for N times
+	 * 1st: check if voltage is in invalid range
+	 * 2nd - N-2nd: check voltage range and delta
+	 * N-1st: check voltage range, delta with HPHR GND switch
+	 * Nth: check voltage range with VDDIO switch if micbias V != vddio V*/
+	for (i = 0; i < num_det && !inval; i++) {
+		gndswitch = (i == (num_det - 1 - vddio));
+		vddioswitch = (vddio && (i == num_det - 1));
+		if (i == 0) {
+			mb_v[i] = tabla_codec_setup_hs_polling(codec);
+			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
+			inval = tabla_is_invalid_insertion_range(codec,
+								 mic_mv[i],
+								 highhph);
+			scaled = mic_mv[i];
+		} else if (vddioswitch) {
+			__tabla_codec_switch_micbias(tabla->codec, 1, false,
+						     false);
+			mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
+			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
+			scaled = tabla_scale_v_micb_vddio(tabla, mic_mv[i],
+							  false);
+			inval = (tabla_is_invalid_insertion_range(codec,
+								  mic_mv[i],
+								  highhph) ||
+				 tabla_is_inval_insert_delta(codec, scaled,
+					  mic_mv[i - 1],
+					  TABLA_MBHC_FAKE_INS_DELTA_SCALED_MV));
+			__tabla_codec_switch_micbias(tabla->codec, 0, false,
+						     false);
+		} else {
+			if (gndswitch)
+				tabla_codec_hphr_gnd_switch(codec, true);
+			mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
+			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
+			inval = (tabla_is_invalid_insertion_range(codec,
+								  mic_mv[i],
+								  highhph) ||
+				 tabla_is_inval_insert_delta(codec, mic_mv[i],
+					  mic_mv[i - 1],
+					  TABLA_MBHC_FAKE_INS_DELTA_SCALED_MV));
+			if (gndswitch)
+				tabla_codec_hphr_gnd_switch(codec, false);
+			scaled = mic_mv[i];
+		}
+		pr_debug("%s: DCE #%d, %04x, V %d, scaled V %d, GND %d, "
+			 "invalid %d\n", __func__,
+			 i + 1, mb_v[i] & 0xffff, mic_mv[i], scaled, gndswitch,
+			 inval);
+	}
+
+	plug_type_ptr =
+	    TABLA_MBHC_CAL_PLUG_TYPE_PTR(tabla->mbhc_cfg.calibration);
+	plug_type[0] = PLUG_TYPE_INVALID;
+	for (i = 0; !inval && i < num_det; i++) {
+		/*
+		 * If we are here, means none of the all
+		 * measurements are fake, continue plug type detection.
+		 * If all three measurements do not produce same
+		 * plug type, restart insertion detection
+		 */
+		if (mic_mv[i] < plug_type_ptr->v_no_mic) {
+			plug_type[i] = PLUG_TYPE_HEADPHONE;
+			pr_debug("%s: Detect attempt %d, detected Headphone\n",
+				 __func__, i);
+		} else if (highhph && (mic_mv[i] > plug_type_ptr->v_hs_max)) {
+			plug_type[i] = PLUG_TYPE_HIGH_HPH;
+			pr_debug("%s: Detect attempt %d, detected High "
+				 "Headphone\n", __func__, i);
+		} else {
+			plug_type[i] = PLUG_TYPE_HEADSET;
+			pr_debug("%s: Detect attempt %d, detected Headset\n",
+				 __func__, i);
+		}
+
+		if (i > 0 && (plug_type[i - 1] != plug_type[i])) {
+			pr_err("%s: Detect attempt %d and %d are not same",
+			       __func__, i - 1, i);
+			plug_type[0] = PLUG_TYPE_INVALID;
+			inval = true;
+			break;
+		}
+	}
+
+	return plug_type[0];
+}
+
 static void tabla_hs_correct_gpio_plug(struct work_struct *work)
 {
 	struct tabla_priv *tabla;
 	struct snd_soc_codec *codec;
-	int retry = 0, i;
+	int retry = 0;
 	bool correction = false;
-	s32 mic_mv[MBHC_NUM_DCE_PLUG_DETECT];
-	short mb_v[MBHC_NUM_DCE_PLUG_DETECT];
-	enum tabla_mbhc_plug_type plug_type[MBHC_NUM_DCE_PLUG_DETECT];
+	enum tabla_mbhc_plug_type plug_type;
 	unsigned long timeout;
 
 	tabla = container_of(work, struct tabla_priv, hs_correct_plug_work);
@@ -4900,38 +4991,31 @@ static void tabla_hs_correct_gpio_plug(struct work_struct *work)
 		}
 
 		/* can race with removal interrupt */
-		TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
-		for (i = 0; i < MBHC_NUM_DCE_PLUG_DETECT; i++) {
-			mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
-			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
-			pr_debug("%s : DCE run %d, mic_mv = %d(%x)\n",
-				 __func__, retry, mic_mv[i], mb_v[i]);
-		}
-		TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+		TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
+		plug_type = tabla_codec_get_plug_type(codec, true);
+		TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 
-		if (tabla_codec_is_invalid_plug(codec, mic_mv, plug_type)) {
+		if (plug_type == PLUG_TYPE_INVALID) {
 			pr_debug("Invalid plug in attempt # %d\n", retry);
 			if (retry == NUM_ATTEMPTS_TO_REPORT &&
 			    tabla->current_plug == PLUG_TYPE_NONE) {
 				tabla_codec_report_plug(codec, 1,
 							SND_JACK_HEADPHONE);
 			}
-		} else if (!tabla_codec_is_invalid_plug(codec, mic_mv,
-							plug_type) &&
-			   plug_type[0] == PLUG_TYPE_HEADPHONE) {
+		} else if (plug_type == PLUG_TYPE_HEADPHONE) {
 			pr_debug("Good headphone detected, continue polling mic\n");
 			if (tabla->current_plug == PLUG_TYPE_NONE) {
 				tabla_codec_report_plug(codec, 1,
 							SND_JACK_HEADPHONE);
 			}
 		} else {
-			TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+			TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 			/* Turn off override */
 			tabla_turn_onoff_override(codec, false);
-			tabla_find_plug_and_report(codec, plug_type[0]);
-			TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+			tabla_find_plug_and_report(codec, plug_type);
+			TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 			pr_debug("Attempt %d found correct plug %d\n", retry,
-				 plug_type[0]);
+				 plug_type);
 			correction = true;
 			break;
 		}
@@ -4947,28 +5031,16 @@ static void tabla_hs_correct_gpio_plug(struct work_struct *work)
 	tabla_unlock_sleep(tabla->codec->control_data);
 }
 
-/* called under cdc_resource_lock acquisition */
+/* called under codec_resource_lock acquisition */
 static void tabla_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 {
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
-	short mb_v[MBHC_NUM_DCE_PLUG_DETECT];
-	s32 mic_mv[MBHC_NUM_DCE_PLUG_DETECT];
-	enum tabla_mbhc_plug_type plug_type[MBHC_NUM_DCE_PLUG_DETECT];
-	int i;
+	enum tabla_mbhc_plug_type plug_type;
 
 	pr_debug("%s: enter\n", __func__);
 
 	tabla_turn_onoff_override(codec, true);
-	mb_v[0] = tabla_codec_setup_hs_polling(codec);
-	mic_mv[0] = tabla_codec_sta_dce_v(codec, 1, mb_v[0]);
-	pr_debug("%s: DCE run 1, mic_mv = %d\n", __func__, mic_mv[0]);
-
-	for (i = 1; i < MBHC_NUM_DCE_PLUG_DETECT; i++) {
-		mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
-		mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
-		pr_debug("%s: DCE run %d, mic_mv = %d\n", __func__, i + 1,
-			 mic_mv[i]);
-	}
+	plug_type = tabla_codec_get_plug_type(codec, true);
 	tabla_turn_onoff_override(codec, false);
 
 	if (tabla_hs_gpio_level_remove(tabla)) {
@@ -4977,48 +5049,26 @@ static void tabla_codec_decide_gpio_plug(struct snd_soc_codec *codec)
 		return;
 	}
 
-	if (tabla_codec_is_invalid_plug(codec, mic_mv, plug_type)) {
+	if (plug_type == PLUG_TYPE_INVALID) {
 		tabla_schedule_hs_detect_plug(tabla);
-	} else if (plug_type[0] == PLUG_TYPE_HEADPHONE) {
+	} else if (plug_type == PLUG_TYPE_HEADPHONE) {
 		tabla_codec_report_plug(codec, 1, SND_JACK_HEADPHONE);
 
 		tabla_schedule_hs_detect_plug(tabla);
 	} else {
-		pr_debug("%s: Valid plug found, determine plug type\n",
-			 __func__);
-		tabla_find_plug_and_report(codec, plug_type[0]);
-	}
-}
-
-/* called under cdc_resource_lock acquisition */
-static void tabla_codec_hphr_gnd_switch(struct snd_soc_codec *codec, bool on)
-{
-	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
-
-	if (tabla->mbhc_data.micb_mv != VDDIO_MICBIAS_MV) {
-		snd_soc_update_bits(codec, TABLA_A_MBHC_HPH, 0x01, on);
-		if (on)
-			usleep_range(5000, 5000);
+		pr_debug("%s: Valid plug found, determine plug type %d\n",
+			 __func__, plug_type);
+		tabla_find_plug_and_report(codec, plug_type);
 	}
 }
 
 /* called under codec_resource_lock acquisition */
 static void tabla_codec_detect_plug_type(struct snd_soc_codec *codec)
 {
-	int i;
-	bool gndswitch, vddioswitch;
-	int scaled;
+	enum tabla_mbhc_plug_type plug_type;
 	struct tabla_priv *tabla = snd_soc_codec_get_drvdata(codec);
 	const struct tabla_mbhc_plug_detect_cfg *plug_det =
 	    TABLA_MBHC_CAL_PLUG_DET_PTR(tabla->mbhc_cfg.calibration);
-	struct tabla_mbhc_plug_type_cfg *plug_type_ptr;
-	const bool vddio = (tabla->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
-			    !tabla->mbhc_micbias_switched);
-	int num_det = (MBHC_NUM_DCE_PLUG_DETECT + vddio);
-	enum tabla_mbhc_plug_type plug_type[num_det];
-	short mb_v[num_det];
-	s32 mic_mv[num_det];
-	bool inval = false;
 
 	/* Turn on the override,
 	 * tabla_codec_setup_hs_polling requires override on */
@@ -5041,84 +5091,11 @@ static void tabla_codec_detect_plug_type(struct snd_soc_codec *codec)
 		return;
 	}
 
-	/* performs DCEs for N times
-	 * 1st: check if voltage is in invalid range
-	 * 2nd - N-2nd: check voltage range and delta
-	 * N-1st: check voltage range, delta with HPHR GND switch
-	 * Nth: check voltage range with VDDIO switch if micbias V != vddio V*/
-	for (i = 0; i < num_det && !inval; i++) {
-		gndswitch = (i == (num_det - 1 - vddio));
-		vddioswitch = (vddio && (i == num_det - 1));
-		if (i == 0) {
-			mb_v[i] = tabla_codec_setup_hs_polling(codec);
-			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
-			inval = tabla_is_invalid_insertion_range(codec,
-								 mic_mv[i]);
-			scaled = mic_mv[i];
-		} else if (vddioswitch) {
-			__tabla_codec_switch_micbias(tabla->codec, 1, false,
-						     false);
-			mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
-			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
-			scaled = tabla_scale_v_micb_vddio(tabla, mic_mv[i],
-							  false);
-			inval = (tabla_is_invalid_insertion_range(codec,
-								  mic_mv[i]) ||
-				 tabla_is_inval_insert_delta(codec, scaled,
-					  mic_mv[i - 1],
-					  TABLA_MBHC_FAKE_INS_DELTA_SCALED_MV));
-			__tabla_codec_switch_micbias(tabla->codec, 0, false,
-						     false);
-		} else {
-			if (gndswitch)
-				tabla_codec_hphr_gnd_switch(codec, true);
-			mb_v[i] = __tabla_codec_sta_dce(codec, 1, true, true);
-			mic_mv[i] = tabla_codec_sta_dce_v(codec, 1 , mb_v[i]);
-			inval = (tabla_is_invalid_insertion_range(codec,
-								  mic_mv[i]) ||
-				 tabla_is_inval_insert_delta(codec, mic_mv[i],
-					  mic_mv[i - 1],
-					  TABLA_MBHC_FAKE_INS_DELTA_SCALED_MV));
-			if (gndswitch)
-				tabla_codec_hphr_gnd_switch(codec, false);
-			scaled = mic_mv[i];
-		}
-		pr_debug("%s: DCE #%d, %04x, V %d, scaled V %d, GND %d, "
-			 "invalid %d\n", __func__,
-			 i + 1, mb_v[i] & 0xffff, mic_mv[i], scaled, gndswitch,
-			 inval);
-	}
+	plug_type = tabla_codec_get_plug_type(codec, tabla->mbhc_cfg.gpio ?
+						     true : false);
 	tabla_turn_onoff_override(codec, false);
 
-	plug_type_ptr =
-	    TABLA_MBHC_CAL_PLUG_TYPE_PTR(tabla->mbhc_cfg.calibration);
-
-	for (i = 0; !inval && i < num_det; i++) {
-		/*
-		 * If we are here, means none of the all
-		 * measurements are fake, continue plug type detection.
-		 * If all three measurements do not produce same
-		 * plug type, restart insertion detection
-		 */
-		if (mic_mv[i] < plug_type_ptr->v_no_mic) {
-			plug_type[i] = PLUG_TYPE_HEADPHONE;
-			pr_debug("%s: Detect attempt %d, detected Headphone\n",
-				 __func__, i);
-		} else {
-			plug_type[i] = PLUG_TYPE_HEADSET;
-			pr_debug("%s: Detect attempt %d, detected Headset\n",
-				 __func__, i);
-		}
-
-		if (i > 0 && (plug_type[i - 1] != plug_type[i])) {
-			pr_err("%s: Detect attempt %d and %d are not same",
-			       __func__, i - 1, i);
-			inval = true;
-			break;
-		}
-	}
-
-	if (inval) {
+	if (plug_type == PLUG_TYPE_INVALID) {
 		pr_debug("%s: Invalid plug type detected\n", __func__);
 		snd_soc_update_bits(codec, TABLA_A_CDC_MBHC_B1_CTL,
 				    0x02, 0x02);
@@ -5126,12 +5103,12 @@ static void tabla_codec_detect_plug_type(struct snd_soc_codec *codec)
 		tabla_codec_enable_hs_detect(codec, 1,
 					     MBHC_USE_MB_TRIGGER |
 					     MBHC_USE_HPHL_TRIGGER, false);
-	} else if (plug_type[0] == PLUG_TYPE_HEADPHONE) {
+	} else if (plug_type == PLUG_TYPE_HEADPHONE) {
 		pr_debug("%s: Headphone Detected\n", __func__);
 		tabla_codec_report_plug(codec, 1, SND_JACK_HEADPHONE);
 		tabla_codec_cleanup_hs_polling(codec);
 		tabla_codec_enable_hs_detect(codec, 0, 0, false);
-	} else if (plug_type[0] == PLUG_TYPE_HEADSET) {
+	} else if (plug_type == PLUG_TYPE_HEADSET) {
 		pr_debug("%s: Headset detected\n", __func__);
 		tabla_codec_report_plug(codec, 1, SND_JACK_HEADSET);
 
@@ -5141,7 +5118,7 @@ static void tabla_codec_detect_plug_type(struct snd_soc_codec *codec)
 	}
 }
 
-/* called only from interrupt which is under cdc_resource_lock acquisition */
+/* called only from interrupt which is under codec_resource_lock acquisition */
 static void tabla_hs_insert_irq_gpio(struct tabla_priv *priv, bool is_removal)
 {
 	struct snd_soc_codec *codec = priv->codec;
@@ -5169,7 +5146,7 @@ static void tabla_hs_insert_irq_gpio(struct tabla_priv *priv, bool is_removal)
 	}
 }
 
-/* called only from interrupt which is under cdc_resource_lock acquisition */
+/* called only from interrupt which is under codec_resource_lock acquisition */
 static void tabla_hs_insert_irq_nogpio(struct tabla_priv *priv, bool is_removal,
 				       bool is_mb_trigger)
 {
@@ -5227,7 +5204,7 @@ static irqreturn_t tabla_hs_insert_irq(int irq, void *data)
 	struct snd_soc_codec *codec = priv->codec;
 
 	pr_debug("%s: enter\n", __func__);
-	TABLA_ACQUIRE_LOCK(priv->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(priv->codec_resource_lock);
 	tabla_disable_irq(codec->control_data, TABLA_IRQ_MBHC_INSERTION);
 
 	is_mb_trigger = !!(snd_soc_read(codec, priv->mbhc_bias_regs.mbhc_reg) &
@@ -5245,7 +5222,7 @@ static irqreturn_t tabla_hs_insert_irq(int irq, void *data)
 	else
 		tabla_hs_insert_irq_nogpio(priv, is_removal, is_mb_trigger);
 
-	TABLA_RELEASE_LOCK(priv->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(priv->codec_resource_lock);
 	return IRQ_HANDLED;
 }
 
@@ -5260,7 +5237,7 @@ static bool is_valid_mic_voltage(struct snd_soc_codec *codec, s32 mic_mv)
 		&& (mic_mv < v_hs_max)) ? true : false;
 }
 
-/* called under cdc_resource_lock acquisition
+/* called under codec_resource_lock acquisition
  * returns true if mic voltage range is back to normal insertion
  * returns false either if timedout or removed */
 static bool tabla_hs_remove_settle(struct snd_soc_codec *codec)
@@ -5340,7 +5317,7 @@ static bool tabla_hs_remove_settle(struct snd_soc_codec *codec)
 	return settled;
 }
 
-/* called only from interrupt which is under cdc_resource_lock acquisition */
+/* called only from interrupt which is under codec_resource_lock acquisition */
 static void tabla_hs_remove_irq_gpio(struct tabla_priv *priv)
 {
 	struct snd_soc_codec *codec = priv->codec;
@@ -5350,7 +5327,7 @@ static void tabla_hs_remove_irq_gpio(struct tabla_priv *priv)
 	pr_debug("%s: remove settle done\n", __func__);
 }
 
-/* called only from interrupt which is under cdc_resource_lock acquisition */
+/* called only from interrupt which is under codec_resource_lock acquisition */
 static void tabla_hs_remove_irq_nogpio(struct tabla_priv *priv)
 {
 	short bias_value;
@@ -5413,7 +5390,7 @@ static irqreturn_t tabla_hs_remove_irq(int irq, void *data)
 	bool vddio;
 	pr_debug("%s: enter, removal interrupt\n", __func__);
 
-	TABLA_ACQUIRE_LOCK(priv->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(priv->codec_resource_lock);
 	vddio = (priv->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
 		 priv->mbhc_micbias_switched);
 	if (vddio)
@@ -5426,7 +5403,7 @@ static irqreturn_t tabla_hs_remove_irq(int irq, void *data)
 
 	if (vddio)
 		__tabla_codec_switch_micbias(priv->codec, 1, true, true);
-	TABLA_RELEASE_LOCK(priv->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(priv->codec_resource_lock);
 
 	return IRQ_HANDLED;
 }
@@ -5467,7 +5444,7 @@ static void tabla_hs_gpio_handler(struct snd_soc_codec *codec)
 	usleep_range(TABLA_GPIO_IRQ_DEBOUNCE_TIME_US,
 		     TABLA_GPIO_IRQ_DEBOUNCE_TIME_US);
 
-	TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 
 	/* cancel pending button press */
 	if (tabla_cancel_btn_work(tabla))
@@ -5529,7 +5506,7 @@ static void tabla_hs_gpio_handler(struct snd_soc_codec *codec)
 	}
 
 	tabla->in_gpio_handler = false;
-	TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 	pr_debug("%s: leave\n", __func__);
 }
 
@@ -5597,7 +5574,6 @@ static void mbhc_fw_read(struct work_struct *work)
 	tabla->mbhc_cfg.mclk_cb_fn(codec, 0, false);
 	tabla_codec_calibrate_hs_polling(codec);
 	if (!tabla->mbhc_cfg.gpio) {
-		tabla->mbhc_inval_hs_range_override = false;
 		rc = tabla_codec_enable_hs_detect(codec, 1,
 						  MBHC_USE_MB_TRIGGER |
 						  MBHC_USE_HPHL_TRIGGER,
@@ -5607,7 +5583,6 @@ static void mbhc_fw_read(struct work_struct *work)
 			pr_err("%s: Failed to setup MBHC detection\n",
 			       __func__);
 	} else {
-		tabla->mbhc_inval_hs_range_override = true;
 		/* Enable Mic Bias pull down and HPH Switch to GND */
 		snd_soc_update_bits(codec,
 				    tabla->mbhc_bias_regs.ctl_reg, 0x01,
@@ -5665,13 +5640,11 @@ int tabla_hs_detect(struct snd_soc_codec *codec,
 		tabla->mbhc_cfg.mclk_cb_fn(codec, 0, false);
 		tabla_codec_calibrate_hs_polling(codec);
 		if (!tabla->mbhc_cfg.gpio) {
-			tabla->mbhc_inval_hs_range_override = false;
 			rc =  tabla_codec_enable_hs_detect(codec, 1,
 							  MBHC_USE_MB_TRIGGER |
 							  MBHC_USE_HPHL_TRIGGER,
 							  false);
 		} else {
-			tabla->mbhc_inval_hs_range_override = true;
 			/* Enable Mic Bias pull down and HPH Switch to GND */
 			snd_soc_update_bits(codec,
 					    tabla->mbhc_bias_regs.ctl_reg, 0x01,
@@ -6211,7 +6184,7 @@ static int tabla_codec_probe(struct snd_soc_codec *codec)
 	tabla->mbhc_fake_ins_start = 0;
 	tabla->no_mic_headset_override = false;
 	tabla->hs_polling_irq_prepared = false;
-	mutex_init(&tabla->cdc_resource_lock);
+	mutex_init(&tabla->codec_resource_lock);
 	tabla->codec = codec;
 	tabla->mbhc_state = MBHC_STATE_NONE;
 	tabla->mbhc_last_resume = 0;
@@ -6359,7 +6332,7 @@ err_remove_irq:
 	tabla_free_irq(codec->control_data, TABLA_IRQ_MBHC_INSERTION, tabla);
 err_insert_irq:
 err_pdata:
-	mutex_destroy(&tabla->cdc_resource_lock);
+	mutex_destroy(&tabla->codec_resource_lock);
 	kfree(tabla);
 	return ret;
 }
@@ -6371,13 +6344,13 @@ static int tabla_codec_remove(struct snd_soc_codec *codec)
 	tabla_free_irq(codec->control_data, TABLA_IRQ_MBHC_POTENTIAL, tabla);
 	tabla_free_irq(codec->control_data, TABLA_IRQ_MBHC_REMOVAL, tabla);
 	tabla_free_irq(codec->control_data, TABLA_IRQ_MBHC_INSERTION, tabla);
-	TABLA_ACQUIRE_LOCK(tabla->cdc_resource_lock);
+	TABLA_ACQUIRE_LOCK(tabla->codec_resource_lock);
 	tabla_codec_disable_clock_block(codec);
-	TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
+	TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 	tabla_codec_enable_bandgap(codec, TABLA_BANDGAP_OFF);
 	if (tabla->mbhc_fw)
 		release_firmware(tabla->mbhc_fw);
-	mutex_destroy(&tabla->cdc_resource_lock);
+	mutex_destroy(&tabla->codec_resource_lock);
 #ifdef CONFIG_DEBUG_FS
 	debugfs_remove(tabla->debugfs_poke);
 	debugfs_remove(tabla->debugfs_mbhc);
