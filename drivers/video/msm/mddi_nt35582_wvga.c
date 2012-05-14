@@ -27,7 +27,7 @@
 #include <linux/pmic8058-pwm.h>
 #endif
 
-#define BL_MAX		230
+#define BL_MAX		255
 
 #ifdef CONFIG_PMIC8058_PWM
 static struct pwm_device *bl_pwm;
