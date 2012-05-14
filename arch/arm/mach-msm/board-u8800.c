@@ -365,17 +365,32 @@ static struct pm8058_pwm_pdata pm8058_pwm_data = {
 	.enable         = pm8058_pwm_enable,
 };
 
-static struct pmic8058_led pmic8058_ffa_leds[] = {
+static struct pmic8058_led pmic8058_leds[] = {
 	[0] = {
-		.name		= "keyboard-backlight",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_LED_KB_LIGHT,
+		.name           = "button-backlight",
+		.max_brightness = 255,
+		.id             = PMIC8058_ID_LED_KB_LIGHT,
+	},
+	[1] = {
+		.name           = "red",
+		.max_brightness = 2,
+		.id             = PMIC8058_ID_LED_0,
+	},
+	[2] = {
+		.name           = "green",
+		.max_brightness = 2,
+		.id             = PMIC8058_ID_LED_1,
+	},
+	[3] = {
+		.name           = "blue",
+		.max_brightness = 2,
+		.id             = PMIC8058_ID_LED_2,
 	},
 };
 
-static struct pmic8058_leds_platform_data pm8058_ffa_leds_data = {
-	.num_leds = ARRAY_SIZE(pmic8058_ffa_leds),
-	.leds	= pmic8058_ffa_leds,
+static struct pmic8058_leds_platform_data pm8058_leds_data = {
+	.num_leds = ARRAY_SIZE(pmic8058_leds),
+	.leds	= pmic8058_leds,
 };
 
 static struct pm8xxx_irq_platform_data pm8xxx_irq_pdata = {
@@ -4983,7 +4998,7 @@ static struct msm_tsif_platform_data tsif_platform_data = {
 
 static void __init pmic8058_leds_init(void)
 {
-	pm8058_7x30_data.leds_pdata = &pm8058_ffa_leds_data;
+	pm8058_7x30_data.leds_pdata = &pm8058_leds_data;
 }
 
 static struct msm_spm_platform_data msm_spm_data __initdata = {
