@@ -3255,11 +3255,6 @@ static struct platform_device qcedev_device = {
 };
 #endif
 
-static struct platform_device pmic_keypad_device = {
-	.name   = "pmic-keypad",
-	.id     = -1,
-};
-
 #ifdef CONFIG_FB_MSM_MDDI_NT35582_WVGA
 static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
 	.gpio = 1,
@@ -3980,7 +3975,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
 	&hs_device,
-	&pmic_keypad_device,
 #ifdef CONFIG_MSM7KV2_AUDIO
 	&msm_aictl_device,
 	&msm_mi2s_device,
