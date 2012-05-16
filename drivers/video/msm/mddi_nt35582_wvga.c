@@ -90,7 +90,7 @@ static int __devinit nt35582_probe(struct platform_device *pdev)
 		bl_pwm = NULL;
 	}
 
-	/* Add default sensitivity to make sure screen won't turn off.*/
+	/* Add default sensitivity to make sure screen won't turn off. */
 	if (bl_pwm) {
 		pwm_config(bl_pwm, DUTY_LEVEL * 150, PWM_PERIOD);
 		pwm_enable(bl_pwm);
@@ -156,16 +156,14 @@ static int __init mddi_nt35582_wvga_init(void)
 	pinfo->type = MDDI_PANEL;
 	pinfo->pdest = DISPLAY_1;
 	pinfo->mddi.vdopkt = MDDI_DEFAULT_PRIM_PIX_ATTR;
+	pinfo->mddi.is_type1 = TRUE;
 	pinfo->wait_cycle = 0;
 	pinfo->bpp = 16;
-	pinfo->lcd.vsync_enable = TRUE;
-	pinfo->lcd.refx100 = 4000;
-	pinfo->mddi.is_type1 = TRUE;
-	pinfo->lcd.v_back_porch = 0;
-	pinfo->lcd.v_front_porch = 0;
-	pinfo->lcd.v_pulse_width = 22;
-	pinfo->lcd.hw_vsync_mode = FALSE;
-	pinfo->lcd.vsync_notifier_period = (1 * HZ);
+	pinfo->lcd.refx100 = 6000;
+	pinfo->lcd.v_back_porch = 2;
+	pinfo->lcd.v_front_porch = 2;
+	pinfo->lcd.v_pulse_width = 2;
+	pinfo->lcd.rev = 1;
 	pinfo->bl_max = BL_MAX;
 	pinfo->bl_min = 1;
 	pinfo->clk_rate = 192000000;
