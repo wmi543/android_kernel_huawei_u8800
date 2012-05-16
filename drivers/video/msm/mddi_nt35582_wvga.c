@@ -21,6 +21,7 @@
 
 #include "msm_fb.h"
 #include "mddihost.h"
+#include "mddihosti.h"
 #include <linux/pwm.h>
 #ifdef CONFIG_PMIC8058_PWM
 #include <linux/mfd/pmic8058.h>
@@ -131,8 +132,17 @@ static int __init mddi_nt35582_wvga_init(void)
 	struct msm_panel_info *pinfo;
 
 #ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
-	if (msm_fb_detect_client("mddi_nt35582_wvga"))
+	u32 id;
+	ret = msm_fb_detect_client("mddi_nt35582_wvga");
+
+	if (ret == -ENODEV)
 		return 0;
+
+	if (ret) {
+		id = mddi_get_client_id();
+		if ((0xb9f6 << 16 | 0x5582) != id)
+			return 0;
+	}
 #endif
 
 	ret = platform_driver_register(&this_driver);

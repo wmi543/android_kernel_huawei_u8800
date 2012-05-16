@@ -3066,21 +3066,9 @@ static struct resource msm_fb_resources[] = {
 
 static int msm_fb_detect_panel(const char *name)
 {
-	/*if (machine_is_msm7x30_fluid()) {
-		if (!strcmp(name, "lcdc_sharp_wvga_pt"))
-			return 0;
-	} else {
-		if (!strncmp(name, "mddi_toshiba_wvga_pt", 20))
-			return -EPERM;
-		else if (!strncmp(name, "lcdc_toshiba_wvga_pt", 20))
-			return 0;
-		else if (!strcmp(name, "mddi_orise"))
-			return -EPERM;
-		else if (!strcmp(name, "mddi_quickvx"))
-			return -EPERM;
-	}
-	return -ENODEV;*/
-	return -EPERM;
+	if (!strcmp(name, "mddi_nt35582_wvga"))
+		return -EPERM;
+	return -ENODEV;
 }
 
 static struct msm_fb_platform_data msm_fb_pdata = {
@@ -3255,9 +3243,10 @@ static struct platform_device qcedev_device = {
 };
 #endif
 
-#ifdef CONFIG_FB_MSM_MDDI_NT35582_WVGA
+#if defined(CONFIG_FB_MSM_MDDI_NT35582_WVGA) || \
+	defined(CONFIG_FB_MSM_MDDI_AUTO_DETECT)
 static struct msm_panel_common_pdata mddi_nt35582_wvga_pdata = {
-	.gpio = 1,
+	.gpio = 1,  /* LPG PMIC_GPIO25 channel number */
 };
 
 static struct platform_device mddi_nt35582_wvga_device = {
@@ -3963,7 +3952,8 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&msm_fb_device,
 	&msm_migrate_pages_device,
-#ifdef CONFIG_FB_MSM_MDDI_NT35582_WVGA
+#if defined(CONFIG_FB_MSM_MDDI_NT35582_WVGA) || \
+	defined(CONFIG_FB_MSM_MDDI_AUTO_DETECT)
 	&mddi_nt35582_wvga_device,
 #endif
 #ifdef CONFIG_MSM_ROTATOR
